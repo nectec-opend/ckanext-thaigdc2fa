@@ -1,0 +1,68 @@
+{% extends "page.html" %}
+
+{% block subtitle %}{{ _('ปิดการใช้งาน 2FA') }}{% endblock %}
+
+{% block primary_content %}
+  <article class="module">
+    <div class="module-content">
+      <h1 class="page-heading">
+        <i class="fa fa-shield"></i>
+        {{ _('ปิดการใช้งาน 2FA') }}
+      </h1>
+      
+      <div class="prose">
+        <div class="alert alert-warning">
+          <i class="fa fa-exclamation-triangle"></i>
+          <strong>คำเตือน:</strong> การปิดการใช้งาน 2FA จะทำให้บัญชีของคุณมีความปลอดภัยน้อยลง
+        </div>
+        
+        <p>{{ _('หากต้องการปิดการใช้งาน 2FA กรุณายืนยันด้วยรหัส 6 หลักจากแอพยืนยันตัวตนของคุณ') }}</p>
+        
+        <form method="post" action="{{ h.url_for('thaigdc2fa.disable') }}" class="form-horizontal" style="max-width: 500px; margin: 30px auto;">
+          <div class="control-group">
+            <label class="control-label" for="code">
+              <strong>{{ _('รหัสยืนยัน') }}</strong>
+            </label>
+            <div class="controls">
+              <input type="text" 
+                     id="code" 
+                     name="code" 
+                     class="form-control input-lg" 
+                     maxlength="6" 
+                     pattern="[0-9]{6}"
+                     placeholder="000000"
+                     autocomplete="off"
+                     required
+                     autofocus
+                     style="font-size: 24px; letter-spacing: 8px; text-align: center; font-family: monospace; padding: 15px;" />
+              <span class="info-block">{{ _('กรอกรหัส 6 หลักจากแอพของคุณ') }}</span>
+            </div>
+          </div>
+          
+          <div class="form-actions" style="text-align: center; margin-top: 30px;">
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="fa fa-times-circle"></i>
+              {{ _('ยืนยันการปิด 2FA') }}
+            </button>
+            <a href="{{ h.url_for('user.read', id=c.user) }}" class="btn btn-default">
+              {{ _('ยกเลิก') }}
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </article>
+{% endblock %}
+
+{% block secondary_content %}
+  <div class="module module-narrow module-shallow">
+    <h2 class="module-heading">
+      <i class="fa fa-info-circle"></i>
+      {{ _('หมายเหตุ') }}
+    </h2>
+    <div class="module-content">
+      <p style="font-size: 0.9em;">หลังจากปิด 2FA คุณจะสามารถเข้าสู่ระบบได้โดยใช้เพียงรหัสผ่านเท่านั้น</p>
+      <p style="font-size: 0.9em;">แนะนำให้เปิดใช้งาน 2FA เพื่อความปลอดภัยสูงสุด</p>
+    </div>
+  </div>
+{% endblock %}

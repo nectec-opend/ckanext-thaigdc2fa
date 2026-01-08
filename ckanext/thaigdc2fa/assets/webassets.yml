@@ -1,0 +1,14 @@
+# thaigdc2fa-js:
+#   filter: rjsmin
+#   output: ckanext-thaigdc2fa/%(version)s-thaigdc2fa.js
+#   contents:
+#     - js/thaigdc2fa.js
+#   extra:
+#     preload:
+#       - base/main
+
+# thaigdc2fa-css:
+#   filter: cssrewrite
+#   output: ckanext-thaigdc2fa/%(version)s-thaigdc2fa.css
+#   contents:
+#     - css/thaigdc2fa.css

@@ -1,0 +1,131 @@
+{% extends "page.html" %}
+
+{% block subtitle %}{{ _('ยืนยันตัวตนด้วย 2FA') }}{% endblock %}
+
+{% block primary_content %}
+  <article class="module">
+    <div class="module-content">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <i class="fa fa-shield" style="font-size: 72px; color: #0066cc; margin-bottom: 20px;"></i>
+        <h1 class="page-heading">
+          {{ _('ยืนยันตัวตนด้วย 2FA') }}
+        </h1>
+      </div>
+      
+      <div class="prose">
+        {% if error %}
+        <div class="alert alert-error">
+          <i class="fa fa-times-circle"></i>
+          <strong>รหัสยืนยันไม่ถูกต้อง</strong> กรุณาลองใหม่อีกครั้ง
+        </div>
+        {% endif %}
+        
+        <div class="alert alert-warning" style="text-align: center; font-size: 1.1em;">
+          <i class="fa fa-lock"></i>
+          {{ _('กรุณากรอกรหัส 6 หลักจากแอพยืนยันตัวตนของคุณเพื่อเข้าสู่ระบบ') }}
+        </div>
+        
+        <form method="post" action="{{ h.url_for('thaigdc2fa.verify') }}" class="form-horizontal" style="max-width: 500px; margin: 40px auto;">
+          <div class="control-group">
+            <label class="control-label" for="code" style="font-size: 1.2em;">
+              <strong>{{ _('รหัสยืนยัน') }}</strong>
+            </label>
+            <div class="controls">
+              <input type="text" 
+                     id="code" 
+                     name="code" 
+                     class="form-control input-lg" 
+                     maxlength="6" 
+                     pattern="[0-9]{6}"
+                     placeholder="000000"
+                     autocomplete="off"
+                     required
+                     autofocus
+                     style="font-size: 32px; letter-spacing: 12px; text-align: center; font-family: 'Courier New', monospace; padding: 20px; border: 2px solid #0066cc; border-radius: 8px;" />
+              <span class="info-block" style="font-size: 1em; margin-top: 10px;">
+                <i class="fa fa-mobile"></i>
+                {{ _('กรอกรหัสจากแอพยืนยันตัวตนของคุณ') }}
+              </span>
+            </div>
+          </div>
+          
+          <div class="form-actions" style="text-align: center; margin-top: 40px;">
+            <button type="submit" class="btn btn-primary btn-lg" style="padding: 15px 40px; font-size: 1.2em;">
+              <i class="fa fa-check-circle"></i>
+              {{ _('ยืนยัน') }}
+            </button>
+            <br><br>
+            <a href="{{ h.url_for('user.logout') }}" class="btn btn-default">
+              <i class="fa fa-sign-out"></i>
+              {{ _('ยกเลิกและออกจากระบบ') }}
+            </a>
+          </div>
+        </form>
+        
+        <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+          <p class="text-muted" style="margin: 0; font-size: 0.95em;">
+            <i class="fa fa-clock-o"></i>
+            {{ _('รหัสจะเปลี่ยนทุก 30 วินาที') }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </article>
+{% endblock %}
+
+{% block secondary_content %}
+  <div class="module module-narrow module-shallow">
+    <h2 class="module-heading">
+      <i class="fa fa-question-circle"></i>
+      {{ _('ต้องการความช่วยเหลือ?') }}
+    </h2>
+    <div class="module-content">
+      <p><strong>{{ _('ไม่สามารถเข้าถึงแอพยืนยันตัวตนได้?') }}</strong></p>
+      <p style="font-size: 0.9em;">{{ _('หากคุณสูญเสียการเข้าถึงแอพยืนยันตัวตน กรุณาติดต่อผู้ดูแลระบบเพื่อขอรีเซ็ต 2FA') }}</p>
+      
+      <hr>
+      
+      <p><strong>{{ _('ทำไมรหัสไม่ถูกต้อง?') }}</strong></p>
+      <ul style="font-size: 0.9em;">
+        <li>ตรวจสอบเวลาบนโทรศัพท์ให้ตรงกับเวลาจริง</li>
+        <li>รอให้รหัสเปลี่ยนใหม่แล้วลองอีกครั้ง</li>
+        <li>ตรวจสอบว่าใช้แอพที่ถูกต้อง</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="module module-narrow module-shallow">
+    <h2 class="module-heading">
+      <i class="fa fa-info-circle"></i>
+      {{ _('เกี่ยวกับ 2FA') }}
+    </h2>
+    <div class="module-content">
+      <p style="font-size: 0.9em;">{{ _('การยืนยันตัวตนแบบสองชั้น (2FA) ช่วยปกป้องบัญชีของคุณจากการเข้าถึงโดยไม่ได้รับอนุญาต แม้ว่ารหัสผ่านจะรั่วไหล') }}</p>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    // Auto-submit form when 6 digits are entered
+    document.getElementById('code').addEventListener('input', function(e) {
+      // Remove non-numeric characters
+      e.target.value = e.target.value.replace(/[^0-9]/g, '');
+      
+      if (e.target.value.length === 6) {
+        // Add visual feedback
+        e.target.style.borderColor = '#28a745';
+        e.target.style.backgroundColor = '#f0fff4';
+        
+        // Wait a moment to let user see the full code
+        setTimeout(function() {
+          e.target.form.submit();
+        }, 400);
+      }
+    });
+    
+    // Focus on input field
+    document.getElementById('code').focus();
+  </script>
+{% endblock %}

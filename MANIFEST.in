@@ -1,0 +1,6 @@
+include README.rst
+include LICENSE
+include requirements.txt
+recursive-include ckanext/thaigdc2fa *.html *.json *.js *.less *.css *.mo *.yml
+recursive-include ckanext/thaigdc2fa/migration *.ini *.py *.mako
+recursive-include ckanext/thaigdc2fa/public *.*
