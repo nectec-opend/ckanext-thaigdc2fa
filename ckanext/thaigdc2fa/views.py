@@ -14,6 +14,7 @@ from flask import Blueprint, redirect, render_template
 import ckan.plugins.toolkit as toolkit
 from ckan.common import _, config, g, request, session
 from ckan.model import meta
+from ckanext.thaigdc2fa.model import create_secret, get_secret_by_user_id, update_verified_at, disable_secret
 from ckan.views.user import next_page_or_default, rotate_token
 from ckan.lib.authenticator import default_authenticate
 
@@ -37,19 +38,12 @@ def get_cipher():
 
 
 def _current_or_pending_user():
-    """
-    คืนค่า (user, is_pending)
-    - ถ้ามี pending_user => ดึงจาก DB
-    - ไม่งั้นใช้ g.userobj/toolkit.c.userobj
-    """
     pending = auth_helper.get_pending_user()
     if pending:
         from ckan import model
-
         user = model.User.get(pending["username"])
         return user, True
 
-    # logged-in user (กรณีเปิด 2FA ทีหลัง)
     user = None
     try:
         user = toolkit.c.userobj
@@ -59,25 +53,16 @@ def _current_or_pending_user():
 
 
 def _user_has_twofa(user):
-    plugin_extras = user.plugin_extras or {}
-    return (
-        plugin_extras.get("twofa_enabled") == "true"
-        and bool(plugin_extras.get("twofa_secret"))
-    )
+    
+    return get_secret_by_user_id(user.id) is not None
 
 
 def setup():
-    """
-    ตั้งค่า 2FA ครั้งแรก
-    """
     user, is_pending = _current_or_pending_user()
     if not user:
         toolkit.h.flash_error(_("กรุณาเข้าสู่ระบบก่อน"))
         return toolkit.redirect_to("user.login")
-
-    plugin_extras = user.plugin_extras or {}
-
-    # ถ้าตั้งค่าแล้ว -> บังคับไป verify (policy: ต้องผ่าน 2FA)
+        
     if _user_has_twofa(user):
         return toolkit.redirect_to("thaigdc2fa.verify")
 
@@ -97,18 +82,8 @@ def setup():
                 cipher = get_cipher()
                 encrypted_secret = cipher.encrypt(temp_secret.encode()).decode()
 
-                plugin_extras["twofa_secret"] = encrypted_secret
-                plugin_extras["twofa_enabled"] = "true"
-                plugin_extras["twofa_created"] = datetime.datetime.utcnow().isoformat()
-                plugin_extras["twofa_last_verified"] = datetime.datetime.utcnow().isoformat()
-
-                user.plugin_extras = plugin_extras
-
-                db = meta.Session()
-                db.add(user)
-                db.commit()
-
-                # สร้าง login จริงหลัง setup สำเร็จ
+                create_secret(user.id, encrypted_secret)
+                
                 if is_pending:
                     auth_helper.create_login_session(user)
                     auth_helper.clear_pending_user()
@@ -119,8 +94,8 @@ def setup():
                     session.save()
 
                 toolkit.login_user(user)
-
                 toolkit.h.flash_success(_("เปิดใช้งาน 2FA สำเร็จ"))
+
                 next_url = session.get("2fa_next_url") or toolkit.url_for("home.index")
                 return redirect(next_url)
 
@@ -128,7 +103,6 @@ def setup():
                 log.error("Error saving 2FA setup: %s", e, exc_info=True)
                 toolkit.h.flash_error(_("เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่"))
 
-    # GET: generate secret ใหม่ (ถ้ายังไม่มีใน session)
     secret = session.get("twofa_temp_secret")
     if not secret:
         secret = pyotp.random_base32()
@@ -136,8 +110,9 @@ def setup():
         session.save()
 
     totp = pyotp.TOTP(secret)
-    site_url = config.get("ckan.site_url", "http://localhost").split("//")[-1]
-    uri = totp.provisioning_uri(name=(user.email or user.name), issuer_name=site_url)
+    site_domain = config.get("ckan.site_url", "http://localhost").split("//")[-1].split("/")[0]
+
+    uri = totp.provisioning_uri(f"{user.name}", issuer_name=f"{site_domain}")
 
     img_b64 = None
     try:
@@ -157,27 +132,20 @@ def setup():
 
 
 def verify():
-    """
-    ยืนยัน 2FA (ทุกครั้งหลังผ่าน user/pass)
-    """
     user, is_pending = _current_or_pending_user()
     if not user:
         toolkit.h.flash_error(_("กรุณาเข้าสู่ระบบก่อน"))
         return toolkit.redirect_to("user.login")
-
-    plugin_extras = user.plugin_extras or {}
-
-    # ถ้ายังไม่ setup -> ไป setup
-    if not _user_has_twofa(user):
+        
+    secret_obj = get_secret_by_user_id(user.id)
+    if not secret_obj:
         return toolkit.redirect_to("thaigdc2fa.setup")
-
-    encrypted_secret = plugin_extras.get("twofa_secret")
 
     try:
         cipher = get_cipher()
-        secret = cipher.decrypt(encrypted_secret.encode()).decode()
+        secret = cipher.decrypt(secret_obj.secret.encode()).decode()
     except Exception as e:
-        log.error("Error decrypting 2FA secret for %s: %s", user.name, e, exc_info=True)
+        log.error("Decrypt Error for %s: %s", user.name, e, exc_info=True)
         toolkit.h.flash_error(_("ถอดรหัส 2FA ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ"))
         return toolkit.redirect_to("home.index")
 
@@ -189,18 +157,11 @@ def verify():
             return render_template("thaigdc2fa/verify.html", error=True, user=user)
 
         try:
-            plugin_extras["twofa_last_verified"] = datetime.datetime.utcnow().isoformat()
-            user.plugin_extras = plugin_extras
+            update_verified_at(secret_obj)
 
-            db = meta.Session()
-            db.add(user)
-            db.commit()
-
-            # ปล่อยให้ login จริง
             if is_pending:
                 auth_helper.create_login_session(user)
                 auth_helper.clear_pending_user()
-
             else:
                 session["2fa_validated"] = True
                 session["2fa_user_id"] = user.id
@@ -223,9 +184,6 @@ def verify():
 
 
 def disable():
-    """
-    ปิด 2FA (sysadmin เท่านั้น)
-    """
     user = getattr(g, "userobj", None)
     if not user:
         return toolkit.abort(401, _("Unauthorized"))
@@ -234,31 +192,19 @@ def disable():
         return toolkit.redirect_to("user.read", id=user.name)
 
     if request.method == "POST":
-        plugin_extras = user.plugin_extras or {}
-        encrypted_secret = plugin_extras.get("twofa_secret")
+        secret_obj = get_secret_by_user_id(user.id)
 
-        if encrypted_secret:
+        if secret_obj:
             code = request.form.get("code", "").strip()
             try:
                 cipher = get_cipher()
-                secret = cipher.decrypt(encrypted_secret.encode()).decode()
+                secret = cipher.decrypt(secret_obj.secret.encode()).decode()
                 totp = pyotp.TOTP(secret)
 
                 if not totp.verify(code, valid_window=1):
                     toolkit.h.flash_error(_("รหัสยืนยันไม่ถูกต้อง"))
                 else:
-                    for k in (
-                        "twofa_secret",
-                        "twofa_enabled",
-                        "twofa_created",
-                        "twofa_last_verified",
-                    ):
-                        plugin_extras.pop(k, None)
-
-                    user.plugin_extras = plugin_extras
-                    db = meta.Session()
-                    db.add(user)
-                    db.commit()
+                    disable_secret(secret_obj)
 
                     auth_helper.clear_2fa_session()
                     toolkit.h.flash_success(_("ปิดการใช้งาน 2FA สำเร็จ"))
@@ -270,22 +216,11 @@ def disable():
     return toolkit.redirect_to("user.read", id=user.name)
 
 
-# ---------- LOGIN OVERRIDE (CKAN 2.10.x style) ----------
-
 def authenticate(identity):
-    """
-    แค่ตรวจ user/pass ให้เหมือน CKAN ปกติ แล้วคืน user object
-    """
     return default_authenticate(identity)
 
 
 def login():
-    """
-    Override /user/login:
-    - ตรวจ user/pass ด้วย default_authenticate
-    - ถ้าผ่าน: set pending user + redirect ไป setup/verify
-    - ห้ามสร้าง login session จริงที่นี่
-    """
     if toolkit.current_user.is_authenticated:
         return toolkit.render("user/logout_first.html", {})
 
@@ -302,11 +237,9 @@ def login():
 
     rotate_token()
 
-    # เก็บ next url ที่ CKAN ใช้ redirect หลัง login
     next_url = request.args.get("next") or request.form.get("next") or toolkit.url_for("home.index")
     auth_helper.set_pending_user(user_obj.name, user_obj.id, next_url=next_url)
 
-    # บังคับเสมอ: ถ้ามี 2FA แล้ว -> verify, ถ้ายังไม่มี -> setup
     if _user_has_twofa(user_obj):
         return redirect(toolkit.url_for("thaigdc2fa.verify", next=next_url))
     return redirect(toolkit.url_for("thaigdc2fa.setup", next=next_url))

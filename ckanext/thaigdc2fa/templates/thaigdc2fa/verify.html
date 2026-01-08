@@ -26,6 +26,7 @@
         </div>
         
         <form method="post" action="{{ h.url_for('thaigdc2fa.verify') }}" class="form-horizontal" style="max-width: 500px; margin: 40px auto;">
+          {{ h.csrf_input() }}
           <div class="control-group">
             <label class="control-label" for="code" style="font-size: 1.2em;">
               <strong>{{ _('รหัสยืนยัน') }}</strong>

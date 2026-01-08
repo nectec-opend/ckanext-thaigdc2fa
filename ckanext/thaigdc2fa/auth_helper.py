@@ -1,4 +1,3 @@
-# ckanext/thaigdc2fa/auth_helper.py
 import logging
 from ckan.common import request, session
 

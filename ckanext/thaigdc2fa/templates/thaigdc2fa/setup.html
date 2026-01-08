@@ -49,6 +49,7 @@
         <p>{{ _('กรอกรหัส 6 หลักจากแอพยืนยันตัวตนของคุณเพื่อทำการยืนยันการตั้งค่า:') }}</p>
         
         <form method="post" action="{{ h.url_for('thaigdc2fa.setup') }}" class="form-horizontal" style="max-width: 500px; margin: 20px auto;">
+          {{ h.csrf_input() }}
           <div class="control-group">
             <label class="control-label" for="code">
               <strong>{{ _('รหัสยืนยัน') }}</strong>
@@ -90,18 +91,15 @@
     <div class="module-content">
       <ul style="list-style: none; padding: 0;">
         <li style="padding: 5px 0;">
-          <i class="fa fa-android" style="color: #3DDC84;"></i>
-          <i class="fa fa-apple" style="color: #000;"></i>
+          <i class="fa fa-key"></i>
           <strong>Google Authenticator</strong>
         </li>
         <li style="padding: 5px 0;">
-          <i class="fa fa-android" style="color: #3DDC84;"></i>
-          <i class="fa fa-apple" style="color: #000;"></i>
+          <i class="fa fa-key"></i>
           <strong>Microsoft Authenticator</strong>
         </li>
         <li style="padding: 5px 0;">
-          <i class="fa fa-android" style="color: #3DDC84;"></i>
-          <i class="fa fa-apple" style="color: #000;"></i>
+          <i class="fa fa-key"></i>
           <strong>Authy</strong>
         </li>
         <li style="padding: 5px 0;">

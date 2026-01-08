@@ -19,6 +19,7 @@
         <p>{{ _('หากต้องการปิดการใช้งาน 2FA กรุณายืนยันด้วยรหัส 6 หลักจากแอพยืนยันตัวตนของคุณ') }}</p>
         
         <form method="post" action="{{ h.url_for('thaigdc2fa.disable') }}" class="form-horizontal" style="max-width: 500px; margin: 30px auto;">
+          {{ h.csrf_input() }}
           <div class="control-group">
             <label class="control-label" for="code">
               <strong>{{ _('รหัสยืนยัน') }}</strong>

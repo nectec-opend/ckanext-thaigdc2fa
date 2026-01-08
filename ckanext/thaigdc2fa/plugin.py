@@ -6,6 +6,7 @@ import ckan.plugins.toolkit as toolkit
 from ckan.common import request, session
 
 from ckanext.thaigdc2fa import auth_helper
+from ckanext.thaigdc2fa.model import setup as model_setup
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class Thaigdc2faPlugin(plugins.SingletonPlugin):
         toolkit.add_template_directory(config_, "templates")
         toolkit.add_public_directory(config_, "public")
         toolkit.add_resource("assets", "thaigdc2fa")
+        model_setup()
 
     # -------- IAuthenticator --------
 
