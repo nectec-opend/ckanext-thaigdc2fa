@@ -4,6 +4,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import mapper
 from sqlalchemy.exc import ProgrammingError
 from ckan.model.meta import metadata, Session, engine
+from ckan.model import types as _types
 import datetime
 
 class TwoFASecret(object):
@@ -12,7 +13,7 @@ class TwoFASecret(object):
 thaigdc2fa_user_secret_table = Table(
     'thaigdc2fa_user_secret',
     metadata,
-    Column('id', Integer, primary_key=True),
+    Column('id', UnicodeText, primary_key=True, default=_types.make_uuid),
     Column('user_id', UnicodeText, ForeignKey('user.id', ondelete='CASCADE'), nullable=False),
     Column('secret', UnicodeText, nullable=False),
     Column('enabled', Boolean, default=True, nullable=False),
@@ -47,7 +48,6 @@ def disable_secret(secret_obj):
     secret_obj.updated_at = datetime.datetime.utcnow()
     Session.add(secret_obj)
     Session.commit()
-    log.info(f"[2FA] Disabled secret id={secret_obj.id} for user_id={secret_obj.user_id}")
 
 
 def setup():

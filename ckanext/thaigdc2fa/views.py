@@ -13,10 +13,11 @@ from flask import Blueprint, redirect, render_template
 
 import ckan.plugins.toolkit as toolkit
 from ckan.common import _, config, g, request, session
-from ckan.model import meta
-from ckanext.thaigdc2fa.model import create_secret, get_secret_by_user_id, update_verified_at, disable_secret
+from ckan.model import meta, User
+from ckanext.thaigdc2fa.model import create_secret, get_secret_by_user_id, update_verified_at, disable_secret, TwoFASecret
 from ckan.views.user import next_page_or_default, rotate_token
 from ckan.lib.authenticator import default_authenticate
+from sqlalchemy import desc
 
 from ckanext.thaigdc2fa import auth_helper
 
@@ -244,6 +245,46 @@ def login():
         return redirect(toolkit.url_for("thaigdc2fa.verify", next=next_url))
     return redirect(toolkit.url_for("thaigdc2fa.setup", next=next_url))
 
+def admin_users():
+    """
+    Admin page: manage 2FA users
+    """
+    user = getattr(g, "userobj", None)
+
+    if not user or not user.sysadmin:
+        return toolkit.abort(403, _("Sysadmin only"))
+
+    db = meta.Session()
+
+    rows = (
+        db.query(TwoFASecret.created_at, TwoFASecret.verified_at, User.name, User.email, User.fullname, User.id.label("user_id"))
+        .join(User, User.id == TwoFASecret.user_id)
+        .filter(TwoFASecret.enabled == True)
+        .order_by(desc(TwoFASecret.created_at))
+        .all()
+    )
+
+    return toolkit.render("thaigdc2fa/admin_users.html", {"rows": rows})
+
+def admin_reset(user_id):
+    """
+    Reset 2FA for a user
+    """
+    user = getattr(g, "userobj", None)
+
+    if not user or not user.sysadmin:
+        return toolkit.abort(403, _("Sysadmin only"))
+
+    db = meta.Session()
+
+    secret = get_secret_by_user_id(user_id)
+
+    if secret:
+        disable_secret(secret)
+
+    toolkit.h.flash_success(_("2FA reset สำเร็จ"))
+
+    return toolkit.redirect_to("thaigdc2fa.admin_users")
 
 def get_blueprints():
     return [blueprint]
@@ -252,3 +293,15 @@ def get_blueprints():
 blueprint.add_url_rule("/setup", "setup", view_func=setup, methods=["GET", "POST"])
 blueprint.add_url_rule("/verify", "verify", view_func=verify, methods=["GET", "POST"])
 blueprint.add_url_rule("/disable", "disable", view_func=disable, methods=["POST"])
+blueprint.add_url_rule(
+    "/admin/users",
+    "admin_users",
+    view_func=admin_users,
+    methods=["GET"],
+)
+blueprint.add_url_rule(
+    "/admin/reset/<user_id>",
+    "admin_reset",
+    view_func=admin_reset,
+    methods=["POST"],
+)
