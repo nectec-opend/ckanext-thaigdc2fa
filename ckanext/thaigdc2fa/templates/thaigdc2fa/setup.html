@@ -75,6 +75,12 @@
               <i class="fa fa-check-circle"></i>
               {{ _('ยืนยันและเปิดใช้งาน 2FA') }}
             </button>
+            <br>
+            <br>
+            <a href="{{ h.url_for('user.logout') }}" class="btn btn-danger">
+              <i class="fa fa-sign-out"></i>
+              {{ _('ยกเลิกและออกจากระบบ') }}
+            </a>
           </div>
         </form>
       </div>
