@@ -2,47 +2,54 @@
 
 {% block subtitle %}{{ _('ผู้ใช้ที่เปิดใช้งาน 2FA') }}{% endblock %}
 
-{% block primary_content %}
-
-<h2>2FA Users</h2>
-
-<table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Full Name</th>
-            <th>Created</th>
-            <th>Last Verified</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-
-    <tbody>
-    {% for row in rows %}
-        <tr>
-            <td>{{ row.name }}</td>
-            <td>{{ row.email }}</td>
-            <td>{{ row.fullname }}</td>
-            <td>{{ row.created_at }}</td>
-            <td>{{ row.verified_at }}</td>
-
-            <td>
-                <form method="post"
-                      action="{{ h.url_for('thaigdc2fa.admin_reset', user_id=row.user_id) }}">
-                    {{ h.csrf_input() }}
-                    <button class="btn btn-danger btn-sm"
-                            onclick="return confirm('Reset 2FA ?')">
-                        Reset
-                    </button>
-
-                </form>
-            </td>
-
-        </tr>
-    {% endfor %}
-    </tbody>
-
-</table>
-
+{% block breadcrumb_content %}
+  <li class="active">{% link_for _('2FA Users'), named_route='thaigdc2fa.admin_users' %}</li>
 {% endblock %}
+
+{% block primary %}
+    <article class="module" role="main">
+        <div class="module-content">
+            <h2 class="page-heading">2FA Users</h2>
+
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Full Name</th>
+                        <th>Created</th>
+                        <th>Last Verified</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.email }}</td>
+                        <td>{{ row.fullname }}</td>
+                        <td>{{ row.created_at }}</td>
+                        <td>{{ row.verified_at }}</td>
+
+                        <td>
+                            <form method="post"
+                                action="{{ h.url_for('thaigdc2fa.admin_reset', user_id=row.user_id) }}">
+                                {{ h.csrf_input() }}
+                                <button class="btn btn-danger btn-sm"
+                                        onclick="return confirm('Reset 2FA ?')">
+                                    Reset
+                                </button>
+
+                            </form>
+                        </td>
+
+                    </tr>
+                {% endfor %}
+                </tbody>
+
+            </table>
+        </div>
+    </article>
+{% endblock %}
+{% block secondary %}{% endblock %}
