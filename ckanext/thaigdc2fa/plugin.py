@@ -49,6 +49,7 @@ class Thaigdc2faPlugin(plugins.SingletonPlugin):
             or path.startswith("/fanstatic/")
             or path.startswith("/webassets/")
             or path.startswith("/base/")
+            or path.startswith("/uploads/")
             or path.startswith("/images/")
             or path.startswith("/styles/")
             or path == "/favicon.ico"
