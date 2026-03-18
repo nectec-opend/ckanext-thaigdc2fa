@@ -1,7 +1,6 @@
 {% ckan_extends %}
 
 {% block header_account_logged %}
-{{ super() }}
 {% if h.check_access('sysadmin') %}
 <li>
   <a href="{{ h.url_for('thaigdc2fa.admin_users') }}" title="{{ _('2fa') }}">
@@ -10,4 +9,5 @@
   </a>
 </li>
 {% endif %}
+{{ super() }}
 {% endblock %}

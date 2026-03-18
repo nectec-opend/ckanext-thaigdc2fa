@@ -13,14 +13,14 @@
       <div class="prose">
         <div class="alert alert-info">
           <i class="fa fa-info-circle"></i>
-          <strong>สำคัญ:</strong> เพื่อความปลอดภัยของข้อมูล ระบบ Thai GDC กำหนดให้ผู้ใช้งานทุกคนต้องเปิดใช้งาน 2FA
+          <strong>สำคัญ:</strong> เพื่อความปลอดภัยของข้อมูล ระบบบัญชีข้อมูล กำหนดให้ผู้ใช้งานทุกคนต้องเปิดใช้งาน 2FA
         </div>
         
-        <p>{{ _('การยืนยันตัวตนแบบสองชั้นจะช่วยเพิ่มความปลอดภัยให้กับบัญชีของคุณ คุณจะต้องกรอกรหัสจากแอพยืนยันตัวตนทุกครั้งที่เข้าสู่ระบบ') }}</p>
+        <p>{{ _('การยืนยันตัวตนแบบสองชั้นจะช่วยเพิ่มความปลอดภัยให้กับบัญชีผู้ใช้ของคุณ คุณจะต้องกรอกรหัสจากแอพยืนยันตัวตนทุกครั้งที่เข้าสู่ระบบ') }}</p>
         
         <hr>
         
-        <h2><span class="badge">1</span> {{ _('สแกน QR Code') }}</h2>
+        <h2>{{ _('สแกน QR Code') }}</h2>
         <p>{{ _('ใช้แอพยืนยันตัวตน (Google Authenticator, Microsoft Authenticator, Authy ฯลฯ) สแกน QR Code นี้') }}</p>
         
         <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px;">
@@ -33,7 +33,7 @@
           {% endif %}
         </div>
         
-        <h2><span class="badge">2</span> {{ _('หรือกรอก Secret Key ด้วยตนเอง (ถ้าสแกน QR Code ไม่ได้)') }}</h2>
+        <h2>{{ _('หรือกรอก Secret Key ด้วยตนเอง (ถ้าสแกน QR Code ไม่ได้)') }}</h2>
         <p>{{ _('หากไม่สามารถสแกน QR Code ได้ ให้คัดลอก Secret Key นี้ไปกรอกในแอพของคุณ:') }}</p>
         <div style="background: #e9ecef; padding: 20px; margin: 15px 0; font-family: 'Courier New', monospace; font-size: 18px; text-align: center; border-radius: 8px; border: 2px solid #007bff; font-weight: bold; letter-spacing: 2px;">
           {{ secret }}
@@ -45,7 +45,7 @@
         
         <hr style="margin: 30px 0;">
         
-        <h2><span class="badge">3</span> {{ _('ยืนยันการตั้งค่า') }}</h2>
+        <h2>{{ _('ยืนยันการตั้งค่า') }}</h2>
         <p>{{ _('กรอกรหัส 6 หลักจากแอพยืนยันตัวตนของคุณเพื่อทำการยืนยันการตั้งค่า:') }}</p>
         
         <form method="post" action="{{ h.url_for('thaigdc2fa.setup') }}" class="form-horizontal" style="max-width: 500px; margin: 20px auto;">
