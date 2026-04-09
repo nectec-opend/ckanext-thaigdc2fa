@@ -9,6 +9,11 @@ CKAN extension สำหรับเพิ่ม **Two-Factor Authentication (2F
 
 ผู้ใช้ต้องกรอก **OTP 6 หลัก** หลังจาก login เพื่อเพิ่มความปลอดภัย
 
+# Important
+> ⚠️ หมายเหตุ: ระบบ 2FA (TOTP) อ้างอิงเวลาเป็นหลัก  (30 วินาที/รอบ)
+- ดังนั้นเวลาใน server ต้องเป็นเวลาปัจจุบันและควร sync กับเวลาจริง (NTP)  
+- หากเวลาไม่ตรง อาจทำให้ verify OTP ไม่ผ่าน
+
 ---
 
 # Requirements
@@ -53,9 +58,6 @@ python -c "import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decod
 ```
 ckanext.thaigdc2fa.cipher_key = YOUR_SECRET_KEY
 ```
-> ⚠️ หมายเหตุ: ระบบ 2FA (TOTP) อ้างอิงเวลาเป็นหลัก  (30 วินาที/รอบ)
-- ดังนั้นเวลาใน server ต้องเป็นเวลาปัจจุบันและควร sync กับเวลาจริง (NTP)  
-- หากเวลาไม่ตรง อาจทำให้ verify OTP ไม่ผ่าน
 
 # Restart CKAN Service
 ```
