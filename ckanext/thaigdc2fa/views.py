@@ -27,12 +27,12 @@ blueprint = Blueprint("thaigdc2fa", __name__, url_prefix="/2fa")
 
 
 def get_cipher():
-    key = os.environ.get("CKANEXT__THAIGDC2FA_CIPHER_KEY") or config.get(
+    key = os.environ.get("CKANEXT__THAIGDC2FA__CIPHER_KEY") or config.get(
         "ckanext.thaigdc2fa.cipher_key"
     )
     if not key:
         raise Exception(
-            "ไม่พบคีย์การเข้ารหัส CKANEXT__THAIGDC2FA_CIPHER_KEY (env) หรือ ckanext.thaigdc2fa.cipher_key (ini)"
+            "ไม่พบคีย์การเข้ารหัส CKANEXT__THAIGDC2FA__CIPHER_KEY (env) หรือ ckanext.thaigdc2fa.cipher_key (ini)"
         )
     key = hashlib.sha256(key.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(key))
