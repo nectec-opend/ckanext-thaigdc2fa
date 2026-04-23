@@ -305,40 +305,6 @@ def verify():
 
     return render_template("thaigdc2fa/verify.html", user=user)
 
-
-def disable():
-    user = getattr(g, "userobj", None)
-    if not user:
-        return toolkit.abort(401, _("Unauthorized"))
-    if not user.sysadmin:
-        toolkit.h.flash_error(_("คุณไม่มีสิทธิ์ในการปิด 2FA"))
-        return toolkit.redirect_to("user.read", id=user.name)
-
-    if request.method == "POST":
-        secret_obj = get_secret_by_user_id(user.id)
-
-        if secret_obj:
-            code = request.form.get("code", "").strip()
-            try:
-                cipher = get_cipher()
-                secret = cipher.decrypt(secret_obj.secret.encode()).decode()
-                totp = pyotp.TOTP(secret)
-
-                if not totp.verify(code, valid_window=1):
-                    toolkit.h.flash_error(_("รหัสยืนยันไม่ถูกต้อง"))
-                else:
-                    disable_secret(secret_obj)
-
-                    auth_helper.clear_2fa_session()
-                    toolkit.h.flash_success(_("ปิดการใช้งาน 2FA สำเร็จ"))
-
-            except Exception as e:
-                log.error("Error disabling 2FA: %s", e, exc_info=True)
-                toolkit.h.flash_error(_("เกิดข้อผิดพลาด"))
-
-    return toolkit.redirect_to("user.read", id=user.name)
-
-
 def authenticate(identity):
     return default_authenticate(identity)
 
@@ -424,7 +390,6 @@ def get_blueprints():
 
 blueprint.add_url_rule("/setup", "setup", view_func=setup, methods=["GET", "POST"])
 blueprint.add_url_rule("/verify", "verify", view_func=verify, methods=["GET", "POST"])
-blueprint.add_url_rule("/disable", "disable", view_func=disable, methods=["POST"])
 blueprint.add_url_rule(
     "/admin/users",
     "admin_users",
