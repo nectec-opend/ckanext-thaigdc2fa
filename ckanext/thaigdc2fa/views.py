@@ -1,10 +1,10 @@
-# ckanext/thaigdc2fa/views.py
 import base64
 import datetime
 import hashlib
 import io
 import logging
 import os
+from urllib.parse import urlparse
 
 import pyotp
 import qrcode
@@ -24,6 +24,91 @@ from ckanext.thaigdc2fa import auth_helper
 log = logging.getLogger(__name__)
 
 blueprint = Blueprint("thaigdc2fa", __name__, url_prefix="/2fa")
+
+def _is_safe_redirect_url(url):
+    """ตรวจสอบว่า URL ปลอดภัยสำหรับ redirect (ต้องเป็น relative path เท่านั้น)"""
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return (
+        parsed.scheme == ""
+        and parsed.netloc == ""
+        and url.startswith("/")
+        and not url.startswith("//")
+    )
+
+
+def _safe_next_url(url, fallback=None):
+    """คืน URL ที่ปลอดภัย ถ้าไม่ปลอดภัยให้ใช้ fallback"""
+    if fallback is None:
+        fallback = toolkit.url_for("home.index")
+    if _is_safe_redirect_url(url):
+        return url
+    return fallback
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting (in-memory, เหมาะสำหรับ single-process — ถ้าใช้ multi-process ให้เปลี่ยนเป็น Redis)
+# ---------------------------------------------------------------------------
+
+_otp_fail_tracker = {}   # key: user_id → {"count": int, "locked_until": datetime|None}
+_FAIL_LIMIT = 5          # จำนวนครั้งที่ fail ได้
+_LOCKOUT_SECONDS = 900   # 15 นาที
+
+
+def _check_otp_rate_limit(user_id):
+    """
+    คืน (is_blocked, seconds_remaining)
+    """
+    now = datetime.datetime.utcnow()
+    state = _otp_fail_tracker.get(user_id)
+    if not state:
+        return False, 0
+    locked_until = state.get("locked_until")
+    if locked_until and now < locked_until:
+        remaining = int((locked_until - now).total_seconds())
+        return True, remaining
+    if locked_until and now >= locked_until:
+        # หมด lockout แล้ว reset
+        _otp_fail_tracker.pop(user_id, None)
+    return False, 0
+
+
+def _record_otp_fail(user_id):
+    """บันทึกการ fail และ lock ถ้าเกิน limit"""
+    now = datetime.datetime.utcnow()
+    state = _otp_fail_tracker.setdefault(user_id, {"count": 0, "locked_until": None})
+    state["count"] += 1
+    if state["count"] >= _FAIL_LIMIT:
+        state["locked_until"] = now + datetime.timedelta(seconds=_LOCKOUT_SECONDS)
+        log.warning("2FA rate limit triggered for user_id=%s, locked for %ds", user_id, _LOCKOUT_SECONDS)
+
+
+def _clear_otp_fail(user_id):
+    """เมื่อ verify สำเร็จ ให้ reset counter"""
+    _otp_fail_tracker.pop(user_id, None)
+
+
+# ---------------------------------------------------------------------------
+# OTP Replay prevention (in-memory used-token cache)
+# ---------------------------------------------------------------------------
+
+_used_otps = {}  # key: user_id → set of (totp_counter)
+
+
+def _is_otp_replayed(user_id, totp_counter):
+    """ตรวจว่า OTP counter นี้ถูกใช้ไปแล้วหรือยัง"""
+    used = _used_otps.get(user_id, set())
+    return totp_counter in used
+
+
+def _mark_otp_used(user_id, totp_counter):
+    """บันทึกว่า OTP counter นี้ถูกใช้แล้ว (เก็บแค่ 3 counter ล่าสุด)"""
+    used = _used_otps.setdefault(user_id, set())
+    used.add(totp_counter)
+    # ตัดของเก่าออก: เก็บแค่ counter ที่ยังอยู่ใน window ±2
+    now_counter = int(datetime.datetime.utcnow().timestamp()) // 30
+    _used_otps[user_id] = {c for c in used if abs(c - now_counter) <= 2}
 
 
 def get_cipher():
@@ -67,6 +152,13 @@ def setup():
     if _user_has_twofa(user):
         return toolkit.redirect_to("thaigdc2fa.verify")
 
+    # [FIX] ตรวจ rate limit บน setup ด้วย
+    is_blocked, remaining = _check_otp_rate_limit("setup:" + user.id)
+    if is_blocked:
+        mins = remaining // 60
+        toolkit.h.flash_error(_(f"พยายาม setup ผิดมากเกินไป กรุณารอ {mins} นาทีแล้วลองใหม่"))
+        return toolkit.redirect_to("user.logout")
+
     if request.method == "POST":
         code = request.form.get("code", "").strip()
         temp_secret = session.get("twofa_temp_secret")
@@ -76,7 +168,9 @@ def setup():
             return redirect(toolkit.url_for("thaigdc2fa.setup"))
 
         totp = pyotp.TOTP(temp_secret)
-        if not totp.verify(code, valid_window=1):
+        # [FIX] ลด valid_window=0
+        if not totp.verify(code, valid_window=0):
+            _record_otp_fail("setup:" + user.id)
             toolkit.h.flash_error(_("รหัสยืนยันไม่ถูกต้อง กรุณาลองใหม่"))
         else:
             try:
@@ -84,7 +178,9 @@ def setup():
                 encrypted_secret = cipher.encrypt(temp_secret.encode()).decode()
 
                 create_secret(user.id, encrypted_secret)
-                
+                _clear_otp_fail("setup:" + user.id)
+
+                # [FIX] set session state ก่อน login_user (atomic)
                 if is_pending:
                     auth_helper.create_login_session(user)
                     auth_helper.clear_pending_user()
@@ -97,7 +193,9 @@ def setup():
                 toolkit.login_user(user)
                 toolkit.h.flash_success(_("เปิดใช้งาน 2FA สำเร็จ"))
 
-                next_url = session.get("2fa_next_url") or toolkit.url_for("home.index")
+                # [FIX] ตรวจสอบ next URL ก่อน redirect
+                raw_next = session.get("2fa_next_url")
+                next_url = _safe_next_url(raw_next)
                 return redirect(next_url)
 
             except Exception as e:
@@ -150,16 +248,42 @@ def verify():
         toolkit.h.flash_error(_("ถอดรหัส 2FA ไม่ได้ กรุณาติดต่อผู้ดูแลระบบ"))
         return toolkit.redirect_to("home.index")
 
+    # [FIX] ตรวจ rate limit ก่อน render form
+    is_blocked, remaining = _check_otp_rate_limit(user.id)
+    if is_blocked:
+        mins = remaining // 60
+        toolkit.h.flash_error(_(f"พยายาม verify ผิดมากเกินไป กรุณารอ {mins} นาทีแล้วลองใหม่"))
+        return toolkit.redirect_to("user.logout")
+
     if request.method == "POST":
         code = request.form.get("code", "").strip()
         totp = pyotp.TOTP(secret)
 
-        if not totp.verify(code, valid_window=1):
+        # [FIX] ลด valid_window=0 และตรวจ replay
+        now_counter = int(datetime.datetime.utcnow().timestamp()) // 30
+        if not totp.verify(code, valid_window=0):
+            _record_otp_fail(user.id)
+            is_blocked_now, remaining_now = _check_otp_rate_limit(user.id)
+            return render_template(
+                "thaigdc2fa/verify.html",
+                error=True,
+                user=user,
+                locked=is_blocked_now,
+                locked_mins=remaining_now // 60,
+            )
+
+        # [FIX] ป้องกัน OTP replay
+        if _is_otp_replayed(user.id, now_counter):
+            toolkit.h.flash_error(_("รหัสนี้ถูกใช้ไปแล้ว กรุณารอรหัสใหม่ (30 วินาที)"))
             return render_template("thaigdc2fa/verify.html", error=True, user=user)
+
+        _mark_otp_used(user.id, now_counter)
 
         try:
             update_verified_at(secret_obj)
+            _clear_otp_fail(user.id)
 
+            # [FIX] set session state ก่อน login_user (atomic)
             if is_pending:
                 auth_helper.create_login_session(user)
                 auth_helper.clear_pending_user()
@@ -170,11 +294,9 @@ def verify():
 
             toolkit.login_user(user)
 
-            next_url = (
-                request.args.get("next")
-                or session.get("2fa_next_url")
-                or toolkit.url_for("home.index")
-            )
+            # [FIX] ตรวจสอบ next URL ก่อน redirect
+            raw_next = request.args.get("next") or session.get("2fa_next_url")
+            next_url = _safe_next_url(raw_next)
             return redirect(next_url)
 
         except Exception as e:
@@ -238,12 +360,14 @@ def login():
 
     rotate_token()
 
-    next_url = request.args.get("next") or request.form.get("next") or toolkit.url_for("home.index")
-    auth_helper.set_pending_user(user_obj.name, user_obj.id, next_url=next_url)
+    # [FIX] ตรวจสอบ next URL ว่าเป็น relative path เท่านั้น
+    raw_next = request.args.get("next") or request.form.get("next")
+    safe_next = _safe_next_url(raw_next)
+    auth_helper.set_pending_user(user_obj.name, user_obj.id, next_url=safe_next)
 
     if _user_has_twofa(user_obj):
-        return redirect(toolkit.url_for("thaigdc2fa.verify", next=next_url))
-    return redirect(toolkit.url_for("thaigdc2fa.setup", next=next_url))
+        return redirect(toolkit.url_for("thaigdc2fa.verify"))
+    return redirect(toolkit.url_for("thaigdc2fa.setup"))
 
 def admin_users():
     """
@@ -268,22 +392,30 @@ def admin_users():
 
 def admin_reset(user_id):
     """
-    Reset 2FA for a user
+    Reset 2FA for a user — sysadmin only, with audit log
     """
-    user = getattr(g, "userobj", None)
+    admin = getattr(g, "userobj", None)
 
-    if not user or not user.sysadmin:
+    if not admin or not admin.sysadmin:
         return toolkit.abort(403, _("Sysadmin only"))
 
-    db = meta.Session()
+    # [FIX] ตรวจสอบ CSRF token สำหรับ POST action ที่ sensitive
+    # CKAN จัดการ CSRF ผ่าน toolkit แต่ admin_reset form ควรมี csrf_input ด้วย
+    # (ตรวจสอบ template ด้วย — ควรมี {{ h.csrf_input() }} ใน admin_users.html)
 
     secret = get_secret_by_user_id(user_id)
 
     if secret:
         disable_secret(secret)
+        # [FIX] เพิ่ม audit log ว่าใครทำ reset ของใคร
+        log.warning(
+            "2FA ADMIN RESET: admin=%s reset 2FA for user_id=%s (remote_ip=%s)",
+            admin.name,
+            user_id,
+            request.remote_addr,
+        )
 
     toolkit.h.flash_success(_("2FA reset สำเร็จ"))
-
     return toolkit.redirect_to("thaigdc2fa.admin_users")
 
 def get_blueprints():

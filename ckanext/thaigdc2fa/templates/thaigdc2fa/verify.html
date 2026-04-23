@@ -16,7 +16,11 @@
         {% if error %}
         <div class="alert alert-error">
           <i class="fa fa-times-circle"></i>
-          <strong>รหัสยืนยันไม่ถูกต้อง</strong> กรุณาลองใหม่อีกครั้ง
+          {% if locked %}
+            <strong>บัญชีถูกล็อกชั่วคราว</strong> กรุณารอ {{ locked_mins }} นาทีแล้วลองใหม่อีกครั้ง
+          {% else %}
+            <strong>รหัสยืนยันไม่ถูกต้อง</strong> กรุณาลองใหม่อีกครั้ง
+          {% endif %}
         </div>
         {% endif %}
         

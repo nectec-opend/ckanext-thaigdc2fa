@@ -6,24 +6,26 @@ log = logging.getLogger(__name__)
 def create_login_session(user):
     """
     สร้าง login session จริงหลังจาก 2FA สำเร็จ
+    [FIX] ตั้ง 2fa_validated ใน session ก่อน แล้วค่อย set REMOTE_USER
+    เพื่อป้องกัน race condition ที่อาจเกิดจาก concurrent request
     """
     try:
-        environ = request.environ
-
-        identity = {
-            "repoze.who.userid": user.name,
-            "user": user.name,
-            "userobj": user,
-        }
-
-        environ["repoze.who.identity"] = identity
-        environ["REMOTE_USER"] = user.name
-
+        # [FIX] Step 1: set session state ก่อน (2fa_validated ต้องเป็น True ก่อน REMOTE_USER)
         session["user"] = user.name
         session["2fa_validated"] = True
         session["2fa_user_id"] = user.id
         session.pop("twofa_temp_secret", None)
         session.save()
+
+        # [FIX] Step 2: ค่อย set REMOTE_USER หลังจาก session ถูก save แล้ว
+        environ = request.environ
+        identity = {
+            "repoze.who.userid": user.name,
+            "user": user.name,
+            "userobj": user,
+        }
+        environ["repoze.who.identity"] = identity
+        environ["REMOTE_USER"] = user.name
 
         log.info("Login session created successfully for %s", user.name)
         return True
